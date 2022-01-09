@@ -8,9 +8,11 @@ from datetime import datetime
 ip_address = ""
 my_name = ""
 port = 12345
-ip_dictionary = {}
+room_users_dictionary = {}
+rooms_dictionary = {}
 discover_response_dictionary = {}
 encoding = "utf-8"
+host = False
 
 
 def get_ip():
@@ -41,13 +43,24 @@ def create_message(message_type, body=""):
     return json.dumps(message)
 
 
-def discover_online_devices():
-    global ip_dictionary
-    global my_name
-    ip_dictionary = {}
+def type_check():
+    global my_name, host
     if my_name == "":
         print("Enter your name: ")
     my_name = input()
+    print("Do you want to be a host, or a watcher? Type host for host and watcher to be a watcher")
+    user_type = ""
+    while user_type != "host" or user_type != "watcher":
+        user_type = input("Type host for host and watcher to be a watcher:")
+    if user_type == "host":
+        host = True
+    else:
+        discover_online_rooms()
+
+
+def discover_online_rooms():
+    global room_users_dictionary
+    room_users_dictionary = {}
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
         sock.bind(("", 0))
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
@@ -56,17 +69,17 @@ def discover_online_devices():
 
 
 def show_online_devices():
-    global ip_dictionary
-    if len(ip_dictionary) == 0:
+    global room_users_dictionary
+    if len(room_users_dictionary) == 0:
         print("There is no active user")
     else:
         print("Active Users:")
-        for key in ip_dictionary.keys():
+        for key in room_users_dictionary.keys():
             print(key)
 
 
 def listen_discover_message():
-    global ip_dictionary
+    global room_users_dictionary
     global discover_response_dictionary
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
         s.bind(("", port))
@@ -77,27 +90,29 @@ def listen_discover_message():
             message = json.loads(json_msg.decode(encoding=encoding))
             if message["type"] == 1:
                 if message["IP"] != ip_address:
-                    if not message["name"] in discover_response_dictionary.keys():
-                        ip_dictionary[message["name"]] = message["IP"]
-                        discover_response_dictionary[message["name"]] = message["ID"]
-                        respond_message = create_message(2)
-                        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as new_socket:
-                            new_socket.connect((message["IP"], port))
-                            new_socket.sendall(respond_message.encode(encoding=encoding))
-                    elif message["name"] in discover_response_dictionary.keys() and discover_response_dictionary[
-                        message["name"]] != message["ID"]:
-                        print(message["name"], "has changed id. Old ID: ",
-                              discover_response_dictionary[message["name"]], 'new ID:', message["ID"])
-                        ip_dictionary[message["name"]] = message["IP"]
-                        discover_response_dictionary[message["name"]] = message["ID"]
-                        respond_message = create_message(2)
-                        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as new_socket:
-                            new_socket.connect((message["IP"], port))
-                            new_socket.sendall(respond_message.encode(encoding=encoding))
+                    respond_message = create_message(2)
+                    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as new_socket:
+                        new_socket.connect((message["IP"], port))
+                        new_socket.sendall(respond_message.encode(encoding=encoding))
+
+                    # if not message["name"] in discover_response_dictionary.keys():
+                    #     room_users_dictionary[message["name"]] = message["IP"]
+                    #     discover_response_dictionary[message["name"]] = message["ID"]
+                    #
+                    # elif message["name"] in discover_response_dictionary.keys() and discover_response_dictionary[
+                    #     message["name"]] != message["ID"]:
+                    #     print(message["name"], "has changed id. Old ID: ",
+                    #           discover_response_dictionary[message["name"]], 'new ID:', message["ID"])
+                    #     room_users_dictionary[message["name"]] = message["IP"]
+                    #     discover_response_dictionary[message["name"]] = message["ID"]
+                    #     respond_message = create_message(2)
+                    #     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as new_socket:
+                    #         new_socket.connect((message["IP"], port))
+                    #         new_socket.sendall(respond_message.encode(encoding=encoding))
 
 
 def listen_message():
-    global ip_dictionary
+    global room_users_dictionary
 
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.bind(("", port))
@@ -112,29 +127,48 @@ def listen_message():
                 response = json.loads(output.decode(encoding=encoding))
                 if response["type"] == 1:
                     if response["IP"] != ip_address:
-                        ip_dictionary[response["name"]] = response["IP"]
+                        room_users_dictionary[response["name"]] = response["IP"]
                     respond_message = create_message(2)
                     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as new_socket:
                         new_socket.connect((response["IP"], port))
                         new_socket.sendall(respond_message.encode(encoding=encoding))
                 elif response["type"] == 2:
                     if response["IP"] != ip_address:
-                        ip_dictionary[response["name"]] = response["IP"]
+                        room_users_dictionary[response["name"]] = response["IP"]
                 elif response["type"] == 3:
                     print(response["name"] + ":   " + response["body"])
 
 
-def application_user_interface():
-    global ip_dictionary
+def show_online_rooms():
+    global rooms_dictionary
+    if len(rooms_dictionary) == 0:
+        print("There is no active room")
+    else:
+        print("Active Rooms:")
+        for key in rooms_dictionary.keys():
+            print(key)
+
+
+# TODO
+def join_room():
+    pass
+
+
+def application_user_interface_for_client():
+    global room_users_dictionary
     while True:
 
         user_input = input()
-        if user_input == "list":
+        if user_input == "rooms":
+            show_online_rooms()
+        elif user_input == "list":
             show_online_devices()
+        elif user_input.split()[0] == "join":
+            join_room()
         elif user_input.split()[0] == "send":
             receiver = user_input.split()[1]
-            if receiver in ip_dictionary.keys():
-                receiver_ip = ip_dictionary.get(receiver)
+            if receiver in room_users_dictionary.keys():
+                receiver_ip = room_users_dictionary.get(receiver)
                 chat_message = " ".join(user_input.split()[2:])
                 json_message = create_message(3, body=chat_message)
                 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -144,7 +178,35 @@ def application_user_interface():
                         s.sendall(json_message.encode(encoding=encoding))
                     except socket.error:
                         print("message cannot be sent! " + receiver + " is offline!")
-                        ip_dictionary.pop(receiver)
+                        room_users_dictionary.pop(receiver)
+            else:
+                print("No Such Active User!")
+        else:
+            print("No Valid Command")
+
+        sleep(0.3)
+
+
+def application_user_interface_for_host():
+    global room_users_dictionary
+    while True:
+        user_input = input()
+        if user_input == "list":
+            show_online_devices()
+        elif user_input.split()[0] == "send":
+            receiver = user_input.split()[1]
+            if receiver in room_users_dictionary.keys():
+                receiver_ip = room_users_dictionary.get(receiver)
+                chat_message = " ".join(user_input.split()[2:])
+                json_message = create_message(3, body=chat_message)
+                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                    s.settimeout(1)
+                    try:
+                        s.connect((receiver_ip, port))
+                        s.sendall(json_message.encode(encoding=encoding))
+                    except socket.error:
+                        print("message cannot be sent! " + receiver + " is offline!")
+                        room_users_dictionary.pop(receiver)
             else:
                 print("No Such Active User!")
         else:
@@ -155,11 +217,11 @@ def application_user_interface():
 
 if __name__ == '__main__':
     get_ip()
+    type_check()
     print(ip_address)
-    application_ui_thread = Thread(target=application_user_interface)
+    application_ui_thread = Thread(target=application_user_interface_for_client)
     listen_thread = Thread(target=listen_message)
     discover_listen_thread = Thread(target=listen_discover_message)
     listen_thread.start()
     discover_listen_thread.start()
-    discover_online_devices()
     application_ui_thread.start()
