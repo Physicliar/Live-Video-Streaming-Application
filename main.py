@@ -229,21 +229,21 @@ def application_user_interface_for_host():
         if user_input == "list":
             show_room_participants()
         elif user_input.split()[0] == "send":
-            receiver = user_input.split()[1]
-            if receiver in room_users_dictionary.keys():
-                receiver_ip = room_users_dictionary.get(receiver)
-                chat_message = " ".join(user_input.split()[2:])
-                json_message = create_message(3, body=chat_message)
-                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                    s.settimeout(1)
-                    try:
-                        s.connect((receiver_ip, port))
-                        s.sendall(json_message.encode(encoding=encoding))
-                    except socket.error:
-                        print("message cannot be sent! " + receiver + " is offline!")
-                        room_users_dictionary.pop(receiver)
-            else:
-                print("No Such Active User!")
+            try:
+                mutex.acquire()
+                ip = room_users_dictionary[user_input.split()[1]]
+                message = ' '.join(user_input.split()[2:])
+                mutex.release()
+                mes = create_message(MESSAGE_TYPE, message)
+                mes = json.dumps(mes).encode(encoding)
+                didSentMessage = send_tcp_message_with_check(ip, message=mes)
+                if not didSentMessage:
+                    print(user_input.split()[1], "seems disconnected. Please try again later.")
+                    mutex.acquire()
+                    room_users_dictionary.pop(user_input.split()[1])
+                    mutex.release()
+            except: 
+                print("Ups, no user found")
         else:
             print("No Valid Command")
 
