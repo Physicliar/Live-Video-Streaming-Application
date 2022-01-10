@@ -1,18 +1,27 @@
 import json
 import socket
 import select
-from threading import Thread
+from threading import Thread, Lock
 from time import sleep
 from datetime import datetime
 
 ip_address = ""
-my_name = ""
+user_name = ""
 port = 12345
 room_users_dictionary = {}
 rooms_dictionary = {}
 discover_response_dictionary = {}
 encoding = "utf-8"
 host = False
+
+DISCOVER_TYPE = 1
+DISCOVER_RESPONSE_TYPE = 2
+MESSAGE_TYPE = 3
+JOIN_REQUEST_TYPE = 6
+USER_LIST_REQUEST_TYPE = 4
+USER_LIST_RESPONSE_TYPE = 5
+
+mutex = Lock()
 
 
 def get_ip():
@@ -26,41 +35,43 @@ def get_ip():
 
 
 def create_message(message_type, body=""):
-    global my_name
+    global user_name
     global ip_address
     message = {}
-    if my_name == "":
-        print("Enter your name: ")
-        my_name = input()
-    if message_type == 1:
+    if message_type == DISCOVER_TYPE:
         curr_dt = datetime.now()
         timestamp = int(round(curr_dt.timestamp()))
-        message = {"name": my_name, "IP": ip_address, "type": message_type, "ID": timestamp}
-    elif message_type == 2:
-        message = {"name": my_name, "IP": ip_address, "type": message_type}
-    elif message_type == 3:
-        message = {"name": my_name, "type": message_type, "body": body}
+        message = {"name": user_name, "IP": ip_address, "type": message_type, "ID": timestamp}
+    elif message_type == DISCOVER_RESPONSE_TYPE:
+        message = {"name": user_name, "IP": ip_address, "type": message_type}
+    elif message_type == MESSAGE_TYPE:
+        message = {"name": user_name, "type": message_type, "body": body}
+    elif message_type == USER_LIST_REQUEST_TYPE: # to get user list in the room
+        message = {"name": user_name, "type": message_type, "IP": ip_address}
+    elif message_type == USER_LIST_RESPONSE_TYPE: # to send the user list
+        message = {"name": user_name, "type": message_type, "users": room_users_dictionary}
+    elif message_type == JOIN_REQUEST_TYPE:
+        message = {"name": user_name, "IP": ip_address, "type": message_type}
     return json.dumps(message)
 
 
-def type_check():
-    global my_name, host
-    if my_name == "":
-        print("Enter your name: ")
-    my_name = input()
+def get_host_and_name():
+    global user_name, host
+    print("Welcome to video chatting app!")
     print("Do you want to be a host, or a watcher? Type host for host and watcher to be a watcher")
     user_type = ""
     while user_type != "host" or user_type != "watcher":
         user_type = input("Type host for host and watcher to be a watcher:")
     if user_type == "host":
         host = True
+        while user_name == "":
+            user_name = input("Please provide a room name:")
     else:
-        discover_online_rooms()
+        while user_name == "":
+            user_name = input("Enter your name:")
 
 
 def discover_online_rooms():
-    global room_users_dictionary
-    room_users_dictionary = {}
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
         sock.bind(("", 0))
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
@@ -68,7 +79,27 @@ def discover_online_rooms():
             sock.sendto(create_message(1).encode(encoding=encoding), ('<broadcast>', port))
 
 
-def show_online_devices():
+def send_tcp_message_with_check(ip, message):
+    try:
+        send_tcp_message(ip, message, timeout=1)
+        return True
+    except:
+        return False
+
+def send_tcp_message(ip, message, timeout = 0.2):
+    global port
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.settimeout(timeout)
+        s.connect((ip, port))
+        s.sendall(message)
+
+def send_udp_message(ip, message):
+    global port
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+        sock.sendto(message, (ip, port))
+
+
+def print_online_devices():
     global room_users_dictionary
     if len(room_users_dictionary) == 0:
         print("There is no active user")
@@ -78,7 +109,7 @@ def show_online_devices():
             print(key)
 
 
-def listen_discover_message():
+def listen_host_udp():
     global room_users_dictionary
     global discover_response_dictionary
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
@@ -90,30 +121,22 @@ def listen_discover_message():
             message = json.loads(json_msg.decode(encoding=encoding))
             if message["type"] == 1:
                 if message["IP"] != ip_address:
-                    respond_message = create_message(2)
-                    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as new_socket:
-                        new_socket.connect((message["IP"], port))
-                        new_socket.sendall(respond_message.encode(encoding=encoding))
-
-                    # if not message["name"] in discover_response_dictionary.keys():
-                    #     room_users_dictionary[message["name"]] = message["IP"]
-                    #     discover_response_dictionary[message["name"]] = message["ID"]
-                    #
-                    # elif message["name"] in discover_response_dictionary.keys() and discover_response_dictionary[
-                    #     message["name"]] != message["ID"]:
-                    #     print(message["name"], "has changed id. Old ID: ",
-                    #           discover_response_dictionary[message["name"]], 'new ID:', message["ID"])
-                    #     room_users_dictionary[message["name"]] = message["IP"]
-                    #     discover_response_dictionary[message["name"]] = message["ID"]
-                    #     respond_message = create_message(2)
-                    #     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as new_socket:
-                    #         new_socket.connect((message["IP"], port))
-                    #         new_socket.sendall(respond_message.encode(encoding=encoding))
+                    hasSent = False
+                    try:
+                        timestamp = discover_response_dictionary[message["name"]]
+                        if timestamp == message["ID"]:
+                            hasSent = True
+                    except:
+                        hasSent = False
+                    if not hasSent:
+                        mutex.acquire()
+                        message = create_message(DISCOVER_RESPONSE_TYPE)
+                        send_tcp_message(message["IP"], message)
 
 
-def listen_message():
+
+def listen_host_tcp():
     global room_users_dictionary
-
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.bind(("", port))
         s.listen()
@@ -125,17 +148,13 @@ def listen_message():
                     print("There is a problem about your socket you should restart your cmd or computer")
                     break
                 response = json.loads(output.decode(encoding=encoding))
-                if response["type"] == 1:
-                    if response["IP"] != ip_address:
-                        room_users_dictionary[response["name"]] = response["IP"]
-                    respond_message = create_message(2)
-                    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as new_socket:
-                        new_socket.connect((response["IP"], port))
-                        new_socket.sendall(respond_message.encode(encoding=encoding))
-                elif response["type"] == 2:
-                    if response["IP"] != ip_address:
-                        room_users_dictionary[response["name"]] = response["IP"]
-                elif response["type"] == 3:
+                if response["type"] == JOIN_REQUEST_TYPE:
+                    room_users_dictionary[response["name"]] = response["IP"]
+                    print(response["name"], " has joined your room!")
+                elif response["type"] == USER_LIST_REQUEST_TYPE:
+                    message = create_message(USER_LIST_RESPONSE_TYPE)
+                    send_tcp_message(response["IP"], message)
+                elif response["type"] == MESSAGE_TYPE:
                     print(response["name"] + ":   " + response["body"])
 
 
@@ -148,23 +167,39 @@ def show_online_rooms():
         for key in rooms_dictionary.keys():
             print(key)
 
-
-# TODO
-def join_room():
-    pass
-
+def join_room(room_name):
+    try:
+        message = create_message(JOIN_REQUEST_TYPE)
+        ip = rooms_dictionary[room_name]
+        didJoin = send_tcp_message_with_check(ip, message)
+        if didJoin:
+            print("You have successfully joined ", room_name)
+        else:
+            print(room_name, " may no longer be online! Please try again.")
+    except:
+        print("No room named ", room_name, " is found!")
+    
+def show_room_participants():
+    if len(room_users_dictionary) == 0:
+        print("There is no active user in this room!")
+    else:
+        print("Joined Users:")
+        for key in room_users_dictionary.keys():
+            print(key)
 
 def application_user_interface_for_client():
     global room_users_dictionary
     while True:
-
         user_input = input()
         if user_input == "rooms":
             show_online_rooms()
         elif user_input == "list":
-            show_online_devices()
+            show_online_rooms()
         elif user_input.split()[0] == "join":
-            join_room()
+            try:
+                join_room(user_input.split()[1])
+            except:
+                print("Please provide a room name!")
         elif user_input.split()[0] == "send":
             receiver = user_input.split()[1]
             if receiver in room_users_dictionary.keys():
@@ -192,7 +227,7 @@ def application_user_interface_for_host():
     while True:
         user_input = input()
         if user_input == "list":
-            show_online_devices()
+            show_room_participants()
         elif user_input.split()[0] == "send":
             receiver = user_input.split()[1]
             if receiver in room_users_dictionary.keys():
@@ -217,7 +252,7 @@ def application_user_interface_for_host():
 
 if __name__ == '__main__':
     get_ip()
-    type_check()
+    get_host_and_name()
     print(ip_address)
     application_ui_thread = Thread(target=application_user_interface_for_client)
     listen_thread = Thread(target=listen_message)
