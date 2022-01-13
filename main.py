@@ -12,6 +12,7 @@ import cv2
 import imutils
 import pickle
 import struct
+from os import listdir
 
 ip_address = ""
 user_name = ""
@@ -380,6 +381,19 @@ def application_user_interface_for_host():
         elif user_input.split()[0] == "stream":
             ui = multiprocessing.Process(target=stream, args=(room_users_dictionary,))
             ui.start()
+        elif user_input.split()[0] == "share":
+            fileName = ""
+            try:
+                fileName = user_input.split()[1]
+            except:
+                print("Provide a file name!")
+                continue
+            if fileName in listdir():
+                ui = multiprocessing.Process(target=stream, args=(room_users_dictionary,fileName,))
+                ui.start()
+            else:
+                print("No file found!")
+
         elif user_input.split()[0] == "exit":
             for _, val in room_users_dictionary.items():
                 message = create_message(EXIT_HOST_TYPE)
@@ -391,8 +405,11 @@ def application_user_interface_for_host():
         sleep(0.3)
 
 
-def stream(dict):
-    vid = cv2.VideoCapture(0)
+def stream(dict, fileName = None):
+    if fileName:
+        vid = cv2.VideoCapture(fileName)
+    else:
+        vid = cv2.VideoCapture(0)
     while vid.isOpened():
         img, frame = vid.read()
         frame = imutils.resize(frame, width=320)
