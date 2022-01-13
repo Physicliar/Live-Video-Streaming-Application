@@ -67,7 +67,7 @@ def get_host_and_name():
     print("Welcome to video chatting app!")
     print("Do you want to be a host, or a watcher? Type host for host and watcher to be a watcher")
     user_type = ""
-    while user_type != "host" or user_type != "watcher":
+    while user_type != "host" and user_type != "watcher":
         user_type = input("Type host for host and watcher to be a watcher:")
     if user_type == "host":
         host = True
@@ -94,7 +94,7 @@ def send_tcp_message_with_check(ip, message):
     try:
         send_tcp_message(ip, message, timeout=1)
         return True
-    except():
+    except:
         return False
 
 
@@ -141,11 +141,11 @@ def listen_host_udp():
                         timestamp = discover_response_dictionary[message["name"]]
                         if timestamp == message["ID"]:
                             has_sent = True
-                    except():
+                    except:
                         has_sent = False
                     if not has_sent:
-                        message = create_message(DISCOVER_RESPONSE_TYPE)
-                        send_tcp_message(message["IP"], message)
+                        response = create_message(DISCOVER_RESPONSE_TYPE)
+                        send_tcp_message(message["IP"], response)
                         discover_response_dictionary[message["name"]] = message["ID"]
 
 
@@ -236,7 +236,7 @@ def join_room(room_name):
         else:
             print(room_name, " may no longer be online! Please try again.")
             rooms_dictionary.pop(room_name)
-    except():
+    except:
         print("No room named ", room_name, " is found!")
 
 
@@ -259,6 +259,9 @@ def application_user_interface_for_client():
             discover_online_rooms()
             show_online_rooms()
         elif user_input == "list":
+            if joined_room_ip == "":
+                print("You are not a member of any room!")
+                continue
             message = create_message(USER_LIST_REQUEST_TYPE)
             did_sent = send_tcp_message_with_check(joined_room_ip, message)
             if not did_sent:
@@ -266,7 +269,7 @@ def application_user_interface_for_client():
         elif user_input.split()[0] == "join":
             try:
                 join_room(user_input.split()[1])
-            except():
+            except:
                 print("Please provide a room name!")
         elif user_input.split()[0] == "send":
             try:
@@ -282,7 +285,7 @@ def application_user_interface_for_client():
                     mutex.acquire()
                     room_users_dictionary.pop(user_input.split()[1])
                     mutex.release()
-            except():
+            except:
                 print("Ups, no user found")
         else:
             print("No Valid Command")
@@ -310,7 +313,7 @@ def application_user_interface_for_host():
                     mutex.acquire()
                     room_users_dictionary.pop(user_input.split()[1])
                     mutex.release()
-            except():
+            except:
                 print("Ups, no user found")
         elif user_input.split()[0] == "send":
             for _, val in room_users_dictionary:
@@ -334,8 +337,8 @@ if __name__ == '__main__':
         application_ui_thread.start()
     else:
         listen_thread_udp = Thread(target=listen_client_udp)
-        listen_thred_tcp = Thread(target=listen_client_tcp)
+        listen_thread_tcp = Thread(target=listen_client_tcp)
         application_ui_thread = Thread(target=application_user_interface_for_client)
         listen_thread_udp.start()
-        listen_thred_tcp.start()
+        listen_thread_tcp.start()
         application_ui_thread.start()
