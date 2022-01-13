@@ -1,15 +1,20 @@
 import json
-import socket
 import select
+import socket
 import sys
+from datetime import datetime
 from threading import Thread, Lock
 from time import sleep
-from datetime import datetime
-import cv2, pickle, struct, imutils
+
+import cv2
+import imutils
+import pickle
+import struct
 
 ip_address = ""
 user_name = ""
 port = 12345
+streaming_port = 12346
 room_users_dictionary = {}
 rooms_dictionary = {}
 discover_response_dictionary = {}
@@ -108,6 +113,14 @@ def send_tcp_message(ip, message, timeout=0.2):
         s.sendall(message)
 
 
+def send_tcp_stream(ip, message, timeout=0.2):
+    global streaming_port
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.settimeout(timeout)
+        s.connect((ip, streaming_port))
+        s.sendall(message)
+
+
 def send_udp_message(ip, message):
     global port
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
@@ -180,6 +193,36 @@ def listen_host_tcp():
 
 def listen_client_udp():
     pass
+
+
+def list_client_tcp_video_stream():
+    global room_users_dictionary, rooms_dictionary
+    payload_size = struct.calcsize("Q")  # Q: unsigned long long integer(8 bytes)
+    data = b""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(("", streaming_port))
+        s.listen()
+        while True:
+            conn, address = s.accept()
+            with conn:
+                while len(data) < payload_size:
+                    packet = conn.recv(4 * 1024)  # 4K, range(1024 byte to 64KB)
+                    if not packet: break
+                    data += packet  # append the data packet got from server into data variable
+                packed_msg_size = data[:payload_size]
+                data = data[payload_size:]  # Actual frame data
+                msg_size = struct.unpack("Q", packed_msg_size)[0]  # meassage size
+                # print(msg_size)
+
+                while len(data) < msg_size:
+                    data += conn.recv(4 * 1024)  # will receive all frame data from client socket
+                frame_data = data[:msg_size]  # recover actual frame data
+                data = data[msg_size:]
+                frame = pickle.loads(frame_data)  # de-serialize bytes into actual frame type
+                cv2.imshow("RECEIVING VIDEO", frame)  # show video frame at client side
+                key = cv2.waitKey(1) & 0xFF
+                if key == ord('q'):  # press q to exit video
+                    break
 
 
 def listen_client_tcp():
@@ -331,6 +374,27 @@ def application_user_interface_for_host():
                     mutex.release()
             except:
                 print("Ups, no user found")
+        elif user_input.split()[0] == "stream":
+            vid = cv2.VideoCapture(0)
+            while vid.isOpened():
+                img, frame = vid.read()
+                frame = imutils.resize(frame, width=320)
+                a = pickle.dumps(frame)  # serialize frame to bytes
+                message = struct.pack("Q", len(a)) + a  # pack the serialized data
+                # print(message)
+                try:
+                    for ip in room_users_dictionary.values():
+                        send_tcp_message(ip, message)
+
+                except Exception as e:
+                    print(e)
+                    raise Exception(e)
+
+                cv2.imshow('TRANSMITTING VIDEO', frame)  # will show video frame on server side.
+                key = cv2.waitKey(1) & 0xFF
+                if key == ord('q'):
+                    exit()
+
         elif user_input.split()[0] == "exit":
             for _, val in room_users_dictionary.items():
                 message = create_message(EXIT_HOST_TYPE)
