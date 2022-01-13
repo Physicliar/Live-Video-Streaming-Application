@@ -325,28 +325,30 @@ def application_user_interface_for_client():
             except:
                 print("Please provide a room name!")
         elif user_input.split()[0] == "send":
-            # try:
-            if user_input.split()[1] == "host":
-                ip = joined_room_ip
-                message = ' '.join(user_input.split()[2:])
-                mes = create_message(MESSAGE_TYPE, message)
-                did_sent_message = send_tcp_message_with_check(ip, message=mes)
-                if not did_sent_message:
-                    exit_room()
-            else:
-                mutex.acquire()
-                ip = room_users_dictionary[user_input.split()[1]]
-                message = ' '.join(user_input.split()[2:])
-                mutex.release()
-                mes = create_message(MESSAGE_TYPE, message)
-                did_sent_message = send_tcp_message_with_check(ip, message=mes)
-                if not did_sent_message:
-                    print(user_input.split()[1], "seems disconnected. Please try again later.")
-                    mutex.acquire()
-                    room_users_dictionary.pop(user_input.split()[1])
-                    mutex.release()
-            # except:
-            #     print("To send a message type \"send <username> <message>\" or \"send host <message>\"")
+            try:
+                if user_input.split()[1] == "host":
+                    ip = joined_room_ip
+                    message = ' '.join(user_input.split()[2:])
+                    mes = create_message(MESSAGE_TYPE, message)
+                    did_sent_message = send_tcp_message_with_check(ip, message=mes)
+                    if not did_sent_message:
+                        exit_room()
+                else:
+                    try:
+                        ip = room_users_dictionary[user_input.split()[1]]
+                        message = ' '.join(user_input.split()[2:])
+                        
+                        mes = create_message(MESSAGE_TYPE, message)
+                        did_sent_message = send_tcp_message_with_check(ip, message=mes)
+                        if not did_sent_message:
+                            print(user_input.split()[1], "seems disconnected. Please try again later.")
+                            mutex.acquire()
+                            room_users_dictionary.pop(user_input.split()[1])
+                            mutex.release()
+                    except:
+                        print("No user found!")
+            except:
+                print("To send a message type \"send <username> <message>\" or \"send host <message>\"")
         else:
             print("No Valid Command")
 
@@ -416,7 +418,11 @@ if __name__ == '__main__':
     else:
         listen_thread_udp = Thread(target=listen_client_udp)
         listen_thread_tcp = Thread(target=listen_client_tcp)
+        
         application_ui_thread = Thread(target=application_user_interface_for_client)
+        
+
+
 
     listen_thread_tcp.daemon = True
     listen_thread_udp.daemon = True
@@ -424,7 +430,7 @@ if __name__ == '__main__':
     listen_thread_udp.start()
     listen_thread_tcp.start()
     application_ui_thread.start()
-    application_ui_thread.join()
-    application_ui_thread.join()
-    if not application_ui_thread.is_alive():
-        sys.exit()
+    # application_ui_thread.join()
+    # application_ui_thread.join()
+    list_client_tcp_video_stream()
+
