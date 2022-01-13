@@ -59,7 +59,7 @@ def create_message(message_type, body=""):
         message = {"name": user_name, "IP": ip_address, "type": message_type}
     elif message_type == EXIT_HOST_TYPE:
         message = {"name": user_name, "IP": ip_address, "type": message_type}
-    return json.dumps(message)
+    return json.dumps(message).encode(encoding=encoding)
 
 
 def get_host_and_name():
@@ -87,7 +87,7 @@ def discover_online_rooms():
         sock.bind(("", 0))
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
         for i in range(10):
-            sock.sendto(create_message(1).encode(encoding=encoding), ('<broadcast>', port))
+            sock.sendto(create_message(1), ('<broadcast>', port))
 
 
 def send_tcp_message_with_check(ip, message):
@@ -278,7 +278,6 @@ def application_user_interface_for_client():
                 message = ' '.join(user_input.split()[2:])
                 mutex.release()
                 mes = create_message(MESSAGE_TYPE, message)
-                mes = json.dumps(mes).encode(encoding)
                 did_sent_message = send_tcp_message_with_check(ip, message=mes)
                 if not did_sent_message:
                     print(user_input.split()[1], "seems disconnected. Please try again later.")
@@ -306,7 +305,6 @@ def application_user_interface_for_host():
                 message = ' '.join(user_input.split()[2:])
                 mutex.release()
                 mes = create_message(MESSAGE_TYPE, message)
-                mes = json.dumps(mes).encode(encoding)
                 did_sent_message = send_tcp_message_with_check(ip, message=mes)
                 if not did_sent_message:
                     print(user_input.split()[1], "seems disconnected. Please try again later.")
