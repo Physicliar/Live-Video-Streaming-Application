@@ -51,9 +51,9 @@ def create_message(message_type, body=""):
         message = {"name": user_name, "IP": ip_address, "type": message_type}
     elif message_type == MESSAGE_TYPE:
         message = {"name": user_name, "type": message_type, "body": body}
-    elif message_type == USER_LIST_REQUEST_TYPE: # to get user list in the room
+    elif message_type == USER_LIST_REQUEST_TYPE:  # to get user list in the room
         message = {"name": user_name, "type": message_type, "IP": ip_address}
-    elif message_type == USER_LIST_RESPONSE_TYPE: # to send the user list
+    elif message_type == USER_LIST_RESPONSE_TYPE:  # to send the user list
         message = {"name": user_name, "type": message_type, "users": room_users_dictionary}
     elif message_type == JOIN_REQUEST_TYPE:
         message = {"name": user_name, "IP": ip_address, "type": message_type}
@@ -94,15 +94,17 @@ def send_tcp_message_with_check(ip, message):
     try:
         send_tcp_message(ip, message, timeout=1)
         return True
-    except:
+    except():
         return False
 
-def send_tcp_message(ip, message, timeout = 0.2):
+
+def send_tcp_message(ip, message, timeout=0.2):
     global port
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.settimeout(timeout)
         s.connect((ip, port))
         s.sendall(message)
+
 
 def send_udp_message(ip, message):
     global port
@@ -121,6 +123,7 @@ def print_online_devices():
             print(key)
     mutex.release()
 
+
 def listen_host_udp():
     global room_users_dictionary
     global discover_response_dictionary
@@ -133,18 +136,17 @@ def listen_host_udp():
             message = json.loads(json_msg.decode(encoding=encoding))
             if message["type"] == 1:
                 if message["IP"] != ip_address:
-                    hasSent = False
+                    has_sent = False
                     try:
                         timestamp = discover_response_dictionary[message["name"]]
                         if timestamp == message["ID"]:
-                            hasSent = True
-                    except:
-                        hasSent = False
-                    if not hasSent:
+                            has_sent = True
+                    except():
+                        has_sent = False
+                    if not has_sent:
                         message = create_message(DISCOVER_RESPONSE_TYPE)
                         send_tcp_message(message["IP"], message)
                         discover_response_dictionary[message["name"]] = message["ID"]
-
 
 
 def listen_host_tcp():
@@ -171,8 +173,10 @@ def listen_host_tcp():
                 elif response["type"] == MESSAGE_TYPE:
                     print(response["name"] + ":   " + response["body"])
 
+
 def listen_client_udp():
     pass
+
 
 def listen_client_tcp():
     global room_users_dictionary, rooms_dictionary
@@ -201,6 +205,7 @@ def listen_client_tcp():
                 elif response["type"] == EXIT_HOST_TYPE:
                     exit_room()
 
+
 def show_online_rooms():
     global rooms_dictionary
     if len(rooms_dictionary) == 0:
@@ -210,28 +215,31 @@ def show_online_rooms():
         for key in rooms_dictionary.keys():
             print(key)
 
+
 def exit_room():
     global joined_room_ip, joined_room_name
     print("Room host seems disconnected! You are redirected to home!")
     joined_room_name = ""
     joined_room_ip = ""
 
+
 def join_room(room_name):
     global joined_room_ip, joined_room_name
     try:
         message = create_message(JOIN_REQUEST_TYPE)
         ip = rooms_dictionary[room_name]
-        didJoin = send_tcp_message_with_check(ip, message)
-        if didJoin:
+        did_join = send_tcp_message_with_check(ip, message)
+        if did_join:
             joined_room_name = room_name
             joined_room_ip = ip
             print("You have successfully joined ", room_name)
         else:
             print(room_name, " may no longer be online! Please try again.")
             rooms_dictionary.pop(room_name)
-    except:
+    except():
         print("No room named ", room_name, " is found!")
-    
+
+
 def show_room_participants():
     mutex.acquire()
     if len(room_users_dictionary) == 0:
@@ -241,7 +249,7 @@ def show_room_participants():
         for key in room_users_dictionary.keys():
             print(key)
     mutex.release()
-    
+
 
 def application_user_interface_for_client():
     global room_users_dictionary
@@ -252,13 +260,13 @@ def application_user_interface_for_client():
             show_online_rooms()
         elif user_input == "list":
             message = create_message(USER_LIST_REQUEST_TYPE)
-            didSent = send_tcp_message_with_check(joined_room_ip, message)
-            if not didSent:
+            did_sent = send_tcp_message_with_check(joined_room_ip, message)
+            if not did_sent:
                 exit_room()
         elif user_input.split()[0] == "join":
             try:
                 join_room(user_input.split()[1])
-            except:
+            except():
                 print("Please provide a room name!")
         elif user_input.split()[0] == "send":
             try:
@@ -268,13 +276,13 @@ def application_user_interface_for_client():
                 mutex.release()
                 mes = create_message(MESSAGE_TYPE, message)
                 mes = json.dumps(mes).encode(encoding)
-                didSentMessage = send_tcp_message_with_check(ip, message=mes)
-                if not didSentMessage:
+                did_sent_message = send_tcp_message_with_check(ip, message=mes)
+                if not did_sent_message:
                     print(user_input.split()[1], "seems disconnected. Please try again later.")
                     mutex.acquire()
                     room_users_dictionary.pop(user_input.split()[1])
                     mutex.release()
-            except: 
+            except():
                 print("Ups, no user found")
         else:
             print("No Valid Command")
@@ -296,13 +304,13 @@ def application_user_interface_for_host():
                 mutex.release()
                 mes = create_message(MESSAGE_TYPE, message)
                 mes = json.dumps(mes).encode(encoding)
-                didSentMessage = send_tcp_message_with_check(ip, message=mes)
-                if not didSentMessage:
+                did_sent_message = send_tcp_message_with_check(ip, message=mes)
+                if not did_sent_message:
                     print(user_input.split()[1], "seems disconnected. Please try again later.")
                     mutex.acquire()
                     room_users_dictionary.pop(user_input.split()[1])
                     mutex.release()
-            except: 
+            except():
                 print("Ups, no user found")
         elif user_input.split()[0] == "send":
             for _, val in room_users_dictionary:
