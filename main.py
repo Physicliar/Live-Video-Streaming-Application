@@ -327,10 +327,10 @@ if __name__ == '__main__':
     get_host_and_name()
     if host:
         listen_thread_udp = Thread(target=listen_host_udp)
-        listen_thred_tcp = Thread(target=listen_host_tcp)
+        listen_thread_tcp = Thread(target=listen_host_tcp)
         application_ui_thread = Thread(target=application_user_interface_for_host)
         listen_thread_udp.start()
-        listen_thred_tcp.start()
+        listen_thread_tcp.start()
         application_ui_thread.start()
     else:
         listen_thread_udp = Thread(target=listen_client_udp)
