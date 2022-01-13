@@ -82,12 +82,12 @@ def discover_online_rooms():
     global rooms_dictionary
     mutex.acquire()
     rooms_dictionary = {}
-    mutex.release()
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
         sock.bind(("", 0))
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
         for i in range(10):
             sock.sendto(create_message(1), ('<broadcast>', port))
+    mutex.release()
 
 
 def send_tcp_message_with_check(ip, message):
@@ -167,6 +167,8 @@ def listen_host_tcp():
                     room_users_dictionary[response["name"]] = response["IP"]
                     mutex.release()
                     print(response["name"], " has joined your room!")
+                elif response["type"] == DISCOVER_RESPONSE_TYPE:
+                    rooms_dictionary[response["name"]] = response["IP"]
                 elif response["type"] == USER_LIST_REQUEST_TYPE:
                     message = create_message(USER_LIST_RESPONSE_TYPE)
                     send_tcp_message(response["IP"], message)
@@ -191,6 +193,7 @@ def listen_client_tcp():
                     print("There is a problem about your socket, you should restart your cmd or computer")
                     break
                 response = json.loads(output.decode(encoding=encoding))
+                # print(response, "   TCP")
                 if response["type"] == DISCOVER_RESPONSE_TYPE:
                     mutex.acquire()
                     rooms_dictionary[response["name"]] = response["IP"]
@@ -208,13 +211,15 @@ def listen_client_tcp():
 
 def show_online_rooms():
     global rooms_dictionary
+    mutex.acquire()
+    print(rooms_dictionary)
     if len(rooms_dictionary) == 0:
         print("There is no active room")
     else:
         print("Active Rooms:")
         for key in rooms_dictionary.keys():
             print(key)
-
+    mutex.release()
 
 def exit_room():
     global joined_room_ip, joined_room_name
@@ -252,11 +257,13 @@ def show_room_participants():
 
 
 def application_user_interface_for_client():
-    global room_users_dictionary
+    global room_users_dictionary, joined_room_ip
     while True:
         user_input = input()
         if user_input == "rooms":
             discover_online_rooms()
+            print("Searching rooms....")
+            sleep(1)
             show_online_rooms()
         elif user_input == "list":
             if joined_room_ip == "":
@@ -272,7 +279,15 @@ def application_user_interface_for_client():
             except:
                 print("Please provide a room name!")
         elif user_input.split()[0] == "send":
-            try:
+            # try:
+            if user_input.split()[1] == "host":
+                ip = joined_room_ip
+                message = ' '.join(user_input.split()[2:])
+                mes = create_message(MESSAGE_TYPE, message)
+                did_sent_message = send_tcp_message_with_check(ip, message=mes)
+                if not did_sent_message:
+                    exit_room()
+            else:
                 mutex.acquire()
                 ip = room_users_dictionary[user_input.split()[1]]
                 message = ' '.join(user_input.split()[2:])
@@ -284,8 +299,8 @@ def application_user_interface_for_client():
                     mutex.acquire()
                     room_users_dictionary.pop(user_input.split()[1])
                     mutex.release()
-            except:
-                print("Ups, no user found")
+            # except:
+            #     print("To send a message type \"send <username> <message>\" or \"send host <message>\"")
         else:
             print("No Valid Command")
 
@@ -313,7 +328,7 @@ def application_user_interface_for_host():
                     mutex.release()
             except:
                 print("Ups, no user found")
-        elif user_input.split()[0] == "send":
+        elif user_input.split()[0] == "exit":
             for _, val in room_users_dictionary:
                 message = create_message(EXIT_HOST_TYPE)
                 send_tcp_message(val, message)
