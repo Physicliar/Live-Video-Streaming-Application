@@ -384,7 +384,7 @@ def application_user_interface_for_host():
                 # print(message)
                 try:
                     for ip in room_users_dictionary.values():
-                        send_tcp_message(ip, message)
+                        send_tcp_stream(ip, message)
 
                 except Exception as e:
                     print(e)
