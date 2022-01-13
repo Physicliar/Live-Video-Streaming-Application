@@ -1,6 +1,7 @@
 import json
 import socket
 import select
+import sys
 from threading import Thread, Lock
 from time import sleep
 from datetime import datetime
@@ -221,6 +222,7 @@ def show_online_rooms():
             print(key)
     mutex.release()
 
+
 def exit_room():
     global joined_room_ip, joined_room_name
     print("Room host seems disconnected! You are redirected to home!")
@@ -329,9 +331,10 @@ def application_user_interface_for_host():
             except:
                 print("Ups, no user found")
         elif user_input.split()[0] == "exit":
-            for _, val in room_users_dictionary:
+            for _, val in room_users_dictionary.items():
                 message = create_message(EXIT_HOST_TYPE)
                 send_tcp_message(val, message)
+            exit(0)
         else:
             print("No Valid Command")
 
@@ -345,13 +348,18 @@ if __name__ == '__main__':
         listen_thread_udp = Thread(target=listen_host_udp)
         listen_thread_tcp = Thread(target=listen_host_tcp)
         application_ui_thread = Thread(target=application_user_interface_for_host)
-        listen_thread_udp.start()
-        listen_thread_tcp.start()
-        application_ui_thread.start()
     else:
         listen_thread_udp = Thread(target=listen_client_udp)
         listen_thread_tcp = Thread(target=listen_client_tcp)
         application_ui_thread = Thread(target=application_user_interface_for_client)
-        listen_thread_udp.start()
-        listen_thread_tcp.start()
-        application_ui_thread.start()
+
+    listen_thread_tcp.daemon = True
+    listen_thread_udp.daemon = True
+
+    listen_thread_udp.start()
+    listen_thread_tcp.start()
+    application_ui_thread.start()
+    application_ui_thread.join()
+    application_ui_thread.join()
+    if not application_ui_thread.is_alive():
+        sys.exit()
