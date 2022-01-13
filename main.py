@@ -2,9 +2,11 @@ import json
 import select
 import socket
 import sys
+import threading
 from datetime import datetime
 from threading import Thread, Lock
 from time import sleep
+import multiprocessing
 
 import cv2
 import imutils
@@ -113,7 +115,7 @@ def send_tcp_message(ip, message, timeout=0.2):
         s.sendall(message)
 
 
-def send_tcp_stream(ip, message, timeout=0.2):
+def send_tcp_stream(ip, message, timeout=3):
     global streaming_port
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.settimeout(timeout)
@@ -361,10 +363,8 @@ def application_user_interface_for_host():
             show_room_participants()
         elif user_input.split()[0] == "send":
             try:
-                mutex.acquire()
                 ip = room_users_dictionary[user_input.split()[1]]
                 message = ' '.join(user_input.split()[2:])
-                mutex.release()
                 mes = create_message(MESSAGE_TYPE, message)
                 did_sent_message = send_tcp_message_with_check(ip, message=mes)
                 if not did_sent_message:
@@ -374,27 +374,10 @@ def application_user_interface_for_host():
                     mutex.release()
             except:
                 print("Ups, no user found")
+                continue
         elif user_input.split()[0] == "stream":
-            vid = cv2.VideoCapture(0)
-            while vid.isOpened():
-                img, frame = vid.read()
-                frame = imutils.resize(frame, width=320)
-                a = pickle.dumps(frame)  # serialize frame to bytes
-                message = struct.pack("Q", len(a)) + a  # pack the serialized data
-                # print(message)
-                try:
-                    for ip in room_users_dictionary.values():
-                        send_tcp_stream(ip, message)
-
-                except Exception as e:
-                    print(e)
-                    raise Exception(e)
-
-                cv2.imshow('TRANSMITTING VIDEO', frame)  # will show video frame on server side.
-                key = cv2.waitKey(1) & 0xFF
-                if key == ord('q'):
-                    exit()
-
+            ui = multiprocessing.Process(target=stream, args=(room_users_dictionary,))
+            ui.start()
         elif user_input.split()[0] == "exit":
             for _, val in room_users_dictionary.items():
                 message = create_message(EXIT_HOST_TYPE)
@@ -406,25 +389,54 @@ def application_user_interface_for_host():
         sleep(0.3)
 
 
+def stream(dict):
+    vid = cv2.VideoCapture(0)
+    while vid.isOpened():
+        img, frame = vid.read()
+        frame = imutils.resize(frame, width=320)
+        a = pickle.dumps(frame)  # serialize frame to bytes
+        message = struct.pack("Q", len(a)) + a  # pack the serialized data
+        # print(message)
+        try:
+            for ip in dict.values():
+                send_tcp_stream(ip, message)
+
+        except Exception as e:
+            print(e)
+            break
+
+        cv2.imshow('TRANSMITTING VIDEO', frame)  # will show video frame on server side.
+        key = cv2.waitKey(1) & 0xFF
+        if key == ord('q'):
+            exit()
+
+
 if __name__ == '__main__':
     get_ip()
     get_host_and_name()
     if host:
-        listen_thread_udp = Thread(target=listen_host_udp)
-        listen_thread_tcp = Thread(target=listen_host_tcp)
-        application_ui_thread = Thread(target=application_user_interface_for_host)
+        listen_thread_udp = threading.Thread(target=listen_host_udp)
+        listen_thread_tcp = threading.Thread(target=listen_host_tcp)
+        listen_thread_tcp.daemon = True
+        listen_thread_udp.daemon = True
+        listen_thread_udp.start()
+        listen_thread_tcp.start()
+        application_user_interface_for_host()
     else:
-        listen_thread_udp = Thread(target=listen_client_udp)
-        listen_thread_tcp = Thread(target=listen_client_tcp)
-        application_ui_thread = Thread(target=application_user_interface_for_client)
+        listen_thread_udp = threading.Thread(target=listen_client_udp)
+        listen_thread_tcp = threading.Thread(target=listen_client_tcp)
+        application_ui_thread = threading.Thread(target=application_user_interface_for_client)
+        listen_thread_tcp.daemon = True
+        listen_thread_udp.daemon = True
+        listen_thread_udp.start()
+        listen_thread_tcp.start()
+        application_ui_thread.start()
 
-    listen_thread_tcp.daemon = True
-    listen_thread_udp.daemon = True
 
-    listen_thread_udp.start()
-    listen_thread_tcp.start()
-    application_ui_thread.start()
-    application_ui_thread.join()
-    application_ui_thread.join()
-    if not application_ui_thread.is_alive():
-        sys.exit()
+
+    # application_ui_thread.start()
+    # application_ui_thread.join()
+
+
+    # if not application_ui_thread.is_alive():
+    #    sys.exit()
