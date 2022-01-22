@@ -275,6 +275,9 @@ def exit_room():
     print("Room host seems disconnected! You are redirected to home!")
     joined_room_name = ""
     joined_room_ip = ""
+    print("Here is the list of commands you can use:")
+    print("rooms -> lists the avalible rooms")
+    print("join <room_name>  -> join the room")
 
 
 def join_room(room_name):
@@ -287,6 +290,10 @@ def join_room(room_name):
             joined_room_name = room_name
             joined_room_ip = ip
             print("You have successfully joined ", room_name)
+            print("Here is the list of commands you can use:")
+            print("list  -> lists the online users in your room, use this only if you are in a room")
+            print("send host <message> -> send a message to the host")
+            print("send <user_name> <message> -> send a message to a specific user")
         else:
             print(room_name, " may no longer be online! Please try again.")
             rooms_dictionary.pop(room_name)
@@ -306,7 +313,11 @@ def show_room_participants():
 
 
 def application_user_interface_for_client():
-    global room_users_dictionary, joined_room_ip
+    global room_users_dictionary, joined_room_ip, user_name
+    print("Welcome, ", user_name , "! Are you ready to join the rooms?")
+    print("Here is the list of commands you can use:")
+    print("rooms -> lists the avalible rooms")
+    print("join <room_name>  -> join the room")
     while True:
         user_input = input()
         if user_input == "rooms":
@@ -359,7 +370,16 @@ def application_user_interface_for_client():
 
 
 def application_user_interface_for_host():
-    global room_users_dictionary
+    global room_users_dictionary, user_name
+    print("Welcome, welcome! Are you ready to be the coolest host?")
+    print("Here is the list of commands you can use:")
+    print("list -> lists the online users joined your room")
+    print("send <user_name> <message> -> send a message to a specific user")
+    print("stream -> start live video streaming")
+    print("share <filename> -> start sharing video that is already in your directory")
+    print("press \"q\" to end video streaming")
+    print("exit -> to close the room")
+
     while True:
         user_input = input()
         if user_input == "list":
