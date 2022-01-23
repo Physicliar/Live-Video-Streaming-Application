@@ -1,6 +1,7 @@
-# Chat Platform(CP)
-CP is a Python program for chatting with local friends.
-It developed in macOS
+# Video Sharing Program
+This is a program that you can share pre recorded or live videos, or join
+already existing rooms and watch the videos that are being shared, and
+chat meanwhile. Welcome, and enjoy!
 
 ## How to run(Requirements)
 Of course you need python3 :) at least 3.7
