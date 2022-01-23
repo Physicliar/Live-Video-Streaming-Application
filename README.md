@@ -5,7 +5,10 @@ chat meanwhile. Welcome, and enjoy!
 
 ## How to run(Requirements)
 Of course you need python3 :) at least 3.7
-
+Install the requirements:
+```bash
+pip3 install -r requirements.txt
+```
 Just run the main.py
 ```bash
 python3 main.py
